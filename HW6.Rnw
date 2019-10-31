@@ -105,5 +105,29 @@ See
 
 \item  For  the Gaussian ridge prior,  the lasso (Double exponential), independent Cauchy,  and the Generalized Double pareto, show whether the prior satisfy's any/all of the 3 conditions in Fan and Li (2011) \url{https://www.tandfonline.com/doi/abs/10.1198/016214501753382273}.
 
+Lasso:
+For $\b_j \sim DE(0, \lambda)$, we obtain $p_\lambda(|\b_j|) = ln(\lambda) + \frac{|\b_j|}{\lambda}$, and thus $f(|\b_j|) = |\b_j| + \frac{\delta p_\lambda(|\b_j|)}{\delta |\b_j|} = |\b_j| + \frac{1}{\lambda}$\\
+
+We note that $\b_j = 0 \implies f(|\b_j|) = \frac{1}{\lambda}$, thus the Lasso qualifies as a thresholding rule.\\
+Also, since $f(|\b_j|)$is clearly minimized at $|\b_j| = 0$, we can see that the Lasso provides a continuous estimator.\\
+However, since $\lim_{\b_j \to \infty}\frac{\delta p_\lambda(|\b_j|)}{\delta |\b_j|} = \frac{1}{\lambda} \ne 0$, the estimator cannot be considered approximately unbiased. 
+
+
+
+Independent Cauchy:\\
+For $\b_j \sim Cauchy(0, \lambda)$, we obtain $p_\lambda(|\b_j|) = -ln(\lambda) + ln(|\b_j|^2+\lambda^2)$\\
+Then $f(|\b_j|) = |\b_j| + \frac{2|\b_j|}{\lambda^2+|\b_j|^2}$. $|\b_j|=0 \implies f(|\b_j|) = 0$, so this does not qualify as a thresholding rule. It is also easy to see that $f(|\b_j|)$ is monotonically increasing as $|\b_j|$ increases, so the minimum achieved at $\b_j=0$ is singular, thus our estimator will be continuous. Also, since $\lim_{\b_j \to \infty}\frac{\delta p_\lambda(|\b_j|)}{\delta |\b_j|} = 0$, this is an approximately unbiased estimator for large $|\b_j|$. 
+
+Generalized Double Pareto:
+For $\b_j \sim GDP(\eta/\lambda, \lambda)$, we obtain $p_\lambda(|\b_j|) = ln(\eta/\lambda) + (\lambda+1)ln(1 + \frac{|\b_j|}{\eta})$, thus $f(|\b_j|) = |\b_j| + \frac{\lambda+1}{1+\frac{|\b_j|}{\eta}}\frac{1}{\eta}$ \\
+Setting $\b_j = 0 \implies f(|\b_j|) = \frac{\lambda+1}{\eta}$, so for positive $\lambda, \eta$, we obtain a thresholding rule.\\
+We can also see that $\lim_{\b_j \to \infty}\frac{\delta p_\lambda(|\b_j|)}{\delta |\b_j|} = \lim_{\b_j \to \infty}\frac{\lambda+1}{1+\frac{|\b_j|}{\eta}}\frac{1}{\eta} = 0$, so this represents an approximately unbiased estimator.\\
+Finally, we evaluate whether $f(|\b_j|)$ attains a minimum at $0$ in order to determine the continuity of the estimator. We set $\frac{\delta f(|\b_j|)}{\delta |\b_j|} = 1 - \frac{\lambda+1}{\eta^2}(\frac{1}{1+\frac{|\b_j|}{\eta}})^2 = 0$ to identify extrema. Rearranging and expanding a bit, we obtain |\b_j| + 2|\b_j|\eta + \eta^2 - (\lambda+1)=0$\\
+Applying the quadratic formula, we obtain solutions as $|\b_j| = -\eta \pm \sqrt{\lambda+1}$. 
+
+Since $|\b_j| \in \mathbb{R}^{+}$, a solution for $-\eta + \sqrt{\lambda+1}$  will exist if and only if $\eta\le\sqrt{\lambda+1}$. Some tedious algebra will show that these points, if they exist, are guaranteed to be less than $f(0)$, so we must require $\eta \ge \sqrt{\lambda+1}$. The original Armagan, Dunson, and Lee paper sets $\eta = \sqrt{\lambda+1}$, which is sufficient to guarantee a continuous estimator for $|\b_j|$. 
+
+
+
 \end{enumerate}
 \end{document}
