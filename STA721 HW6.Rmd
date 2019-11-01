@@ -1,0 +1,237 @@
+---
+title: "STA721 HW6"
+author: "Zheng Yuan        Evan Wyse"
+date: "2019/10/30"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 1
+
+```{r, cache=T, echo=FALSE}
+n = 50
+sigma = 2.5
+betatrue = c(4,2,0,0,0,-1,0,1.5, 0,0,0,1,0,.5,0,0,0,0,-1,1,4)
+#          int|    X1                            | X2     |X3
+# set the random seed so that we can replicate results. Update your seed to be your team number.
+
+set.seed(42)
+
+# number of simulated data sets
+nsim = 100
+
+fname = rep("df", nsim)
+
+# create 100 datasets
+for (i in 1:nsim) {
+  Z = matrix(rnorm(n*10, 0, 1), ncol=10, nrow=n)
+  X1 = cbind(Z, (Z[,1:5] %*% c(.3, .5, .7, .9, 1.1) %*% t(rep(1,5)) +
+             matrix(rnorm(n*5, 0, 1), ncol=5, nrow=n)))
+  X2 <- matrix(rnorm(n*4,0,1), ncol=4, nrow=n)
+  X3 <- X2[,4]+rnorm(n,0,sd=0.1)
+  X <- cbind(X1,X2,X3)
+  X = sweep(X, 2, apply(X,2, mean))  # subtract off the column means
+  Y = betatrue[1] + X %*% betatrue[-1] + rnorm(n,0,sigma)  # does not have a column of ones for the intercept
+  df = data.frame(Y, X)
+  fname[i] = paste("df", as.character(i), sep="")
+  save(df, file=fname[i])
+}
+```
+
+### (a)
+
+First,the mle for $\hat \beta$ conditional on X is $$\hat \beta=(X^TX)^{-1}X^TY$$\newline
+
+The expected MSE for OLS under the full model can be written as 
+
+$$E[(\beta-\hat \beta)^T (\beta- \hat \beta)]=tr(IVar(\hat \beta))+(E(\beta-\hat \beta))^TE(\beta-\hat \beta)=tr(Var(\hat \beta))+(E(\beta-\hat \beta))^TE(\beta-\hat \beta),$$ and
+$$E(\beta-\hat \beta)=\beta-E(\hat\beta)=\beta-(X^TX)^{-1}X^TX\beta=\beta-\beta=0$$
+$$Var(\hat\beta)=Var((X^TX)^{-1}X^TY)=\sigma^2(X^TX)^{-1}X^TX(X^TX)^{-1}=\sigma^2(X^TX)^{-1}$$
+so $$E[(\beta-\hat \beta)^T (\beta- \hat \beta)]=tr(\sigma^2(X^TX)^{-1})=\sigma^2\sum_{i=1}^{p}\frac{1}{\lambda_i},$$
+
+here $\lambda_i's$ are the eigenvalues of $X^TX$.\newline
+
+### (b)
+
+First, we calculate the average of observed MSEs,
+
+```{r,cache=TRUE, echo=FALSE}
+MSE.OLS  = rep(NA,nsim)
+
+for( i in 1:nsim) {
+  rm(df)
+  load(fname[i])
+  nk.ols = lm(Y ~ ., data=df)
+  coef.ols = coef(nk.ols)
+  MSE.OLS[i] = sum((betatrue - coef.ols)^2)
+#  print(c(i, MSE.OLS[i]))  for the truly bored student
+}
+
+mean(MSE.OLS)
+```
+In order to see whether the average of observed MSEs provides a good estimate of the expected MSE, we can also calculate the expected MSE analytically, that is 
+$$E[(\beta-\hat \beta)^T (\beta- \hat \beta)]=tr(\sigma^2(X^TX)^{-1})$$
+and compare with it.
+
+```{r}
+EMSE=(sigma^2)*sum(diag(solve(t(X)%*%X)))
+EMSE
+```
+
+After comparison, there is still a unignorable difference between the average of observed MSEs and the expected MSE, so it does not provide a good estimate actually.\newline
+
+The distribution of observed MSE minus expected MSEs:
+
+```{r}
+hist(MSE.OLS-EMSE, freq = F, breaks=20);lines(density(MSE.OLS-EMSE))
+```
+\newline As we can see, the distribution of observed MSE minus expected MSEs looks like a normal distribution centering around its mean, which is around -35. In this case, I don't think increasing the number of simulated date sets would help, because the distribution of observed MSE minus expected MSEs does not center around 0, by the Central Limit Theorem, the average of observed MSEs must not converge to expected MSE in the end. Therefore, in fact, the more simulated date sets we have, the more difference between the average and the expected value there will be, until the difference is stable around a value.\newline
+
+### (c)
+```{r,cache=TRUE}
+library(lars)
+library(MASS)
+library(matrixStats)
+library(monomvn)
+
+OLS.MSE = rep(0,100) 
+lasso.MSE = rep(0,100) 
+ridge.MSE = rep(0,100) 
+bhs.MSE = rep(0,100)
+
+Coef.OLS = matrix(rep(0,2100),nrow=100) ## record OLS estimates of beta for each simulation 
+Coef.lasso = matrix(rep(0,2000),nrow=100)## record lasso estimates of beta for each simulation 
+Coef.ridge = matrix(rep(0,2100),nrow=100)## record ridge estimates of beta for each simulation 
+Coef.bhs = matrix(rep(0,2100),nrow=100)## record bhs estimates of beta for each simulation 
+
+
+for( i in 1:100) {
+  rm(df)
+  load(fname[i])
+  X = as.matrix(df[,-1]); Y = df[,1]
+  X.scale = scale(X); n = length(Y); X.mean = colMeans(X); X.sd = colSds(X)
+  coeftrue = betatrue
+  coeftrue[1] = betatrue[1]+sum(betatrue[-1]*X.mean) 
+  coeftrue[-1] = betatrue[-1]*X.sd
+  
+  
+  ## ols
+  nk.ols = lm(Y ~ X)
+  coef.ols = coef(nk.ols)
+  OLS.MSE[i] = sum((betatrue - coef.ols)^2)
+  Coef.OLS[i,1:21]=coef.ols
+  
+  ## lasso
+  nk.lasso = lars(X, Y, type="lasso")
+  coef.lasso = coef(nk.lasso, s=which.min(nk.lasso$Cp))
+  lasso.MSE[i] = sum((betatrue[-1] - coef.lasso)^2)
+  Coef.lasso[i,1:20]=coef.lasso
+  
+  ## ridge
+  seq.lambda = seq(0,10,0.01)
+  nk.ridge = lm.ridge(Y ~ X, lambda = seq.lambda)
+  lambda = seq.lambda[which.min(nk.ridge$GCV)]
+  nk.ridge = lm.ridge(Y ~ X, lambda = lambda)
+  coef.ridge = coef(nk.ridge)
+  ridge.MSE[i] = sum((betatrue - coef.ridge)^2)
+  Coef.ridge[i,1:21]=coef.ridge
+  
+  ## horseshoe
+  nk.bhs = blasso(X, Y, case="hs", RJ=FALSE, normalize=F, verb=0)
+  coef.bhs = c(mean(nk.bhs$mu), apply(nk.bhs$beta, 2, mean))
+  bhs.MSE[i] = sum((betatrue - coef.bhs)^2)
+  Coef.bhs[i,1:21]=coef.bhs
+  
+}
+## Observed MSE for each simulation
+boxplot(OLS.MSE, lasso.MSE, ridge.MSE, bhs.MSE, names=c("OLS", "lasso", "ridge", "horseshoe"), main="MSE")
+
+## eatimation of squared bias and variance for each estimation
+bias2.OLS=sum((colMeans(Coef.OLS)-betatrue)^2)
+var.OLS=sum((Coef.OLS-colMeans(Coef.OLS))^2)/nsim
+
+bias2.lasso=sum((colMeans(Coef.lasso)-betatrue[-1])^2)
+var.lasso=sum((Coef.lasso-colMeans(Coef.lasso))^2)/nsim
+
+bias2.ridge=sum((colMeans(Coef.ridge)-betatrue)^2)
+var.ridge=sum((Coef.ridge-colMeans(Coef.ridge))^2)/nsim
+
+bias2.bhs=sum((colMeans(Coef.bhs)-betatrue)^2)
+var.bhs=sum((Coef.bhs-colMeans(Coef.bhs))^2)/nsim
+
+bias2.OLS
+var.OLS
+
+bias2.lasso
+var.lasso
+
+bias2.ridge
+var.ridge
+
+bias2.bhs
+var.bhs
+```
+For OLS: $\hat{bias^2}=0.06$, $\hat{var}=126.79$\newline
+For lasso: $\hat{bias^2}=1.45$, $\hat{var}=43.82$\newline
+For Ridge: $\hat{bias^2}=2.44$, $\hat{var}=67.97$\newline
+For horseshoe: $\hat{bias^2}=2.80$, $\hat{var}=62.15$\newline
+
+## Problem 2
+
+### Ridge prior
+
+$p_\lambda(|\theta|)=\lambda|\theta|^2$
+
+$p_\lambda^\prime(|\theta|)=2\lambda|\theta|$
+
+1. Unbiasedness: No.  $p_\lambda^\prime(|\theta|)=2\lambda|\theta|$ is not 0 when $|\theta|$ is large. So ridge is not unbiased.
+
+2. Sparsity: No. $\min\ |\theta|+p_\lambda^\prime(|\theta|)=0$. So it does not have sparsity.
+
+3. Continuity: Yes. $\min\ |\theta|+p_\lambda^\prime(|\theta|)$ is attained at 0. So it have continuity.
+
+### Lasso prior
+
+$p_\lambda(|\theta|)=\lambda|\theta|$
+
+$p_\lambda^\prime(|\theta|)=2\lambda$
+
+1. Unbiasedness: No.  $p_\lambda^\prime(|\theta|)=2\lambda$ is not 0  when $|\theta|$ is large. So ridge is not unbiased.
+
+2. Sparsity: Yes. $\min\ |\theta|+p_\lambda^\prime(|\theta|)=|\theta|+2\lambda>0$. So it has sparsity.
+
+3. Continuity: Yes. the minimum is attained at 0. So it have continuity.
+
+### Cauchy prior
+
+1. Unbiasedness:  Yes.
+
+2. Sparsity: Yes, handling Sparsity.
+
+3. Continuity: No, does not hold.
+
+The horseshoe penalty function $p_\lambda(\theta_i)=-\log\log(1+\frac{2\tau^2}{\theta_i^2})$.
+
+$p_\lambda^\prime(\theta_i)=\frac{4\tau^2/|\theta_i|^3}{(1+2\tau^2/|\theta_i|^2)\log(1+2\tau^2/|\theta_i|^2)}$. Then unbiasedness follows.
+ 
+For $\theta\neq0$, $|\theta_i|+p_\lambda^\prime(\theta_i)=|\theta_i|+\frac{4\tau^2/|\theta_i|^3}{(1+2\tau^2/|\theta_i|^2)\log(1+2\tau^2/|\theta_i|^2)}$ is strictly larger than 0. So it hanles Sparsity.
+
+Since $|\theta_i|+p_\lambda^\prime(\theta_i)\rightarrow \infty$, as $|\theta|\rightarrow 0$. So continuity does not hold.
+
+### Generalized Double Pareto prior
+
+The penalty function is $p_\lambda(|\theta|)=(\alpha+1)\log (|\theta|+\sigma\eta)$.
+
+$p_\lambda^\prime(|\theta|)=(\alpha+1)\frac{1}{|\theta|}$ goes to 0 as $|\theta|\rightarrow \infty$. Then unbiasedness holds.
+
+1. Unbiasedness:  Yes.
+
+2. Sparsity: Holds when $\eta<2\sqrt{1+\alpha}$
+
+3. Continuity: Yes when $\eta<=\sqrt{1+\alpha}$
+
+
+
