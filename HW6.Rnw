@@ -4,6 +4,9 @@
 \usepackage{amsmath,amssymb,array,comment,eucal}
 \input{macros}
 \usepackage{fullpage}
+\def\xtx{\X^T\X}
+\def\bh{\hat{\b}}
+\def\bt{\tilde{\b}}
 
 \begin{document}
 \title{Homework 5: STA 721 Fall19}
@@ -60,6 +63,12 @@ modest.  Of the 20 variables, only 8 are related to $Y$.
 
 \begin{enumerate}
   \item  Calculate the $\E[(\hat{\beta} - \beta)^T(\hat{\beta} - \beta)]$, the expected MSE for OLS under the full model.  (should be review!)
+  
+  For $\sigma^2$ known, $\bh|\sigma^2 \sim N(\b, \sigma^2(\xtx)^{-1})$, for $\sigma^2$ unknown, . 
+  
+
+  
+  
   \item   For each simulation, the OLS coefficients are found and an observed $\MSE = (\hat{\beta}^{(s)} - \beta)^T(\hat{\beta}^{(s)} -  \beta)$ is computed for each of the $s$ simulated datasets.
 <<OLS, cache=TRUE>>= # hide code for submission
 MSE.OLS  = rep(NA,nsim)
@@ -76,10 +85,52 @@ for( i in 1:nsim) {
 
 Does  the average of observed MSEs, \Sexpr{round(mean(MSE.OLS), 2)}, provide a good estimate  of the average of $E[(\hat{\beta} - \beta)^T(\hat{\beta} - \beta)]$? What does the distribution of observed MSE minus expected MSEs look like?   Do you think you should increase the number of simulated data sets?
 
+
+<<>>=
+
+expected_mse <- numeric(nsim) 
+
+for (i in 1:nsim) {
+  rm(df)
+  load(fname[i])
+  nk.ols = lm(Y~., data=df)
+  X <- as.matrix(df[,-1])
+  xtx <- t(X)%*%X
+  ssr <- sum(nk.ols$residuals^2)
+  deg_freedom = n-ncol(X)
+  
+  # TODO should this be norm? 
+  expected_mse[i] <- sum((deg_freedom)/(deg_freedom-2) * sqrt(ssr/diag(solve(xtx)))/deg_freedom)  # variance of t times standard error for beta hat
+}
+
+diff_mse = MSE.OLS - expected_mse
+hist(diff_mse, breaks=20)
+@
+
+
 \item For each of the data sets run lasso, ridge regression (lm.ridge from MASS or other), and the horseshoe (bhs from monomvn package on CRAN or other) to provide estimates of $\beta$  MSE, variance and squared bias for each simulated dataset; be careful about which methods standardize variables.
 
 <<ridge>>=
+library(MASS)
 
+
+betahat.ridge <- matrix(nrow=nsim, ncol=length(betatrue))
+
+
+for( i in 1:nsim) {
+  rm(df)
+  load(fname[i])
+  nk.ridge = lm.ridge(Y ~ ., data=df, lambda=1) # how are we supposed to set lambda here? 
+  betahat.ridge[i,] = coef(nk.ridge) # store coefs
+  
+  # MSE.RIDGE[i] = sum((betatrue - coef.ridge)^2)
+  
+#  print(c(i, MSE.OLS[i]))  for the truly bored student
+}
+
+squared_mse <- apply( (betahat.ridge - matrix(rep(betatrue, nsim), ncol=length(betatrue), byrow = T))^2, 1, sum) # bias for each sim
+variance <- apply(betahat.ridge, 2, var) # estimate of variance
+mse.ridge <- variance + squared_bias
 @
 
 <<lasso>>=
@@ -92,6 +143,34 @@ Does  the average of observed MSEs, \Sexpr{round(mean(MSE.OLS), 2)}, provide a g
 
 \item Derive the full conditional distributions for the Generalized double Pareto model of Armagan, Dunson, and Lee (2011)\footnote{Artin Armagan, David Dunson, \& Jaeyong Lee (2011). Generalized double Pareto shrinkage Statistica Sinica 23 (2013), 119-143 arXiv: 1104.0861v4 } (\url{https://arxiv.org/pdf/1104.0861v4.pdf})
 (see Section 3) but with the Independent Jeffreys prior on $\beta_0$ and $\phi \equiv 1/\sigma^2$.
+
+
+We assume here a centered, rotated $\X$. Also, $\tau, \lambda$ represent diagonal matrices in our notation, with $\tau_{j}$ denoting a particular diagonal element. 
+
+We can write the joint distribution $p(\Y, \b, \tau, \lambda, \phi) \propto \phi^{n/2}exp(-frac{\phi}{2}(\b-\bh)^T(\xtx)(\b-\bh))exp(-frac{\phi}{2}SSE)exp(-\frac{\phi}{2}(\b_0-\bar{y})^2n)p(\b|\tau,\phi)p(\b_0, \phi)p(\tau|\lambda)p(\lambda)$
+
+So $\begin{aligned} \b \propto exp(-\frac{\phi}{2}\b^T\tau^{-1}\b)exp(-frac{\phi}{2}(\b-\bh)^T(\xtx)(\b-\bh))\\
+\propto exp(-\frac{\phi}{2}(\b^T(\xtx+\tau^{-1})\b -2\b^T(\xtx+\tau^{-1})(\xtx+\tau^{-1})^{-1}\xtx\bh ))
+\end{aligned}$ 
+
+We recognize a normal kernel, thus $\b \sim N((\xtx+\tau^{-1})^{-1}\xtx\bh, (\xtx+\tau^{-1})^{-1})$. We can simplify with the identity $\xtx\bh = \X^T\Y$ to obtain the formula in Armagan, Dunson and Lee of $\b \sim N((\xtx+\tau^{-1})^{-1}\X^T\Y, (\xtx+\tau^{-1})^{-1}/\phi)$
+
+It is simpler to find $\tau_{j}$ components individually 
+$$\begin{aligned} \tau_j \propto p(\b|\tau_j,\phi)p(\tau_j|\lambda_j) \propto  (\phi/\tau_j)^{1/2}exp(-\frac{\phi}{2}\b_j^T\b_j/\tau_j)exp(-\lambda^2\tau_j)\\
+\propto \tau_j^{-1/2}exp(-\frac{1}{2}(\phi\b_j^2/\tau_j+\lambda_j^2\tau_j))\\
+\end{aligned}$$
+We can recognize a Generalized Inverse Gaussian kernel, with parameters $\mu = 1/2, \nu=\lambda_j^2, \xi=\b_j^2/\tau$\\
+
+$$\begin{aligned} \phi \propto \phi^{n/2}exp(-frac{\phi}{2}(\b-\bh)^T(\xtx)(\b-\bh))exp(-frac{\phi}{2}SSE)exp(-\frac{\phi}{2}(\b_0-\bar{y})^2n)p(\b|\tau,\phi)p(\b_0, \phi)\\ 
+\propto \phi^{n/2}exp(-frac{\phi}{2}((\b-\bh)^T(\xtx)(\b-\bh)+SSE + n(b_0-\bar{y})^2 + \b^T\tau^{-1}\b)) |\tau/\phi|^{-1/2} 1/\phi \\ 
+\propto \phi^{(n+p)/2-1}exp(-frac{\phi}{2}((\b-\bh)^T(\xtx)(\b-\bh)+SSE + n(b_0-\bar{y})^2 + \b^T\tau^{-1}\b))
+\end{aligned}$$
+
+We can recognize a (rather ugly) Gamma kernel, with parameters $\alpha = (n+p)/2, \beta=((\b-\bh)^T(\xtx)(\b-\bh)+SSE + n(b_0-\bar{y})^2 + \b^T\tau^{-1}\b)/2$\\
+
+$\b_0 \propto $exp(-\frac{\phi}{2}(n(b_0-\bar{y})^2))$, we can recognize a normal kernel, with $\mu=\bar{y}, \sigma^2 = 1/(n\phi)$\\
+
+
 
 \item  Emplement the Generalized Double Pareto  and compare to the above methods, using the default $\alpha = \eta = 1$.
 See
@@ -122,7 +201,7 @@ Generalized Double Pareto:
 For $\b_j \sim GDP(\eta/\lambda, \lambda)$, we obtain $p_\lambda(|\b_j|) = ln(\eta/\lambda) + (\lambda+1)ln(1 + \frac{|\b_j|}{\eta})$, thus $f(|\b_j|) = |\b_j| + \frac{\lambda+1}{1+\frac{|\b_j|}{\eta}}\frac{1}{\eta}$ \\
 Setting $\b_j = 0 \implies f(|\b_j|) = \frac{\lambda+1}{\eta}$, so for positive $\lambda, \eta$, we obtain a thresholding rule.\\
 We can also see that $\lim_{\b_j \to \infty}\frac{\delta p_\lambda(|\b_j|)}{\delta |\b_j|} = \lim_{\b_j \to \infty}\frac{\lambda+1}{1+\frac{|\b_j|}{\eta}}\frac{1}{\eta} = 0$, so this represents an approximately unbiased estimator.\\
-Finally, we evaluate whether $f(|\b_j|)$ attains a minimum at $0$ in order to determine the continuity of the estimator. We set $\frac{\delta f(|\b_j|)}{\delta |\b_j|} = 1 - \frac{\lambda+1}{\eta^2}(\frac{1}{1+\frac{|\b_j|}{\eta}})^2 = 0$ to identify extrema. Rearranging and expanding a bit, we obtain |\b_j| + 2|\b_j|\eta + \eta^2 - (\lambda+1)=0$\\
+Finally, we evaluate whether $f(|\b_j|)$ attains a minimum at $0$ in order to determine the continuity of the estimator. We set $\frac{\delta f(|\b_j|)}{\delta |\b_j|} = 1 - \frac{\lambda+1}{\eta^2}(\frac{1}{1+\frac{|\b_j|}{\eta}})^2 = 0$ to identify extrema. Rearranging and expanding a bit, we obtain $|\b_j| + 2|\b_j|\eta + \eta^2 - (\lambda+1)=0$\\
 Applying the quadratic formula, we obtain solutions as $|\b_j| = -\eta \pm \sqrt{\lambda+1}$. 
 
 Since $|\b_j| \in \mathbb{R}^{+}$, a solution for $-\eta + \sqrt{\lambda+1}$  will exist if and only if $\eta\le\sqrt{\lambda+1}$. Some tedious algebra will show that these points, if they exist, are guaranteed to be less than $f(0)$, so we must require $\eta \ge \sqrt{\lambda+1}$. The original Armagan, Dunson, and Lee paper sets $\eta = \sqrt{\lambda+1}$, which is sufficient to guarantee a continuous estimator for $|\b_j|$. 
