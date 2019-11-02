@@ -147,37 +147,80 @@ for( i in 1:100) {
   
 }
 ## Observed MSE for each simulation
-boxplot(OLS.MSE, lasso.MSE, ridge.MSE, bhs.MSE, names=c("OLS", "lasso", "ridge", "horseshoe"), main="MSE")
+boxplot(OLS.MSE, lasso.MSE, ridge.MSE, bhs.MSE, names=c("OLS", "lasso", "ridge", "horseshoe"), main="Observed MSE")
 
 ## eatimation of squared bias and variance for each estimation
-bias2.OLS=sum((colMeans(Coef.OLS)-betatrue)^2)
-var.OLS=sum((Coef.OLS-colMeans(Coef.OLS))^2)/nsim
 
-bias2.lasso=sum((colMeans(Coef.lasso)-betatrue[-1])^2)
-var.lasso=sum((Coef.lasso-colMeans(Coef.lasso))^2)/nsim
+mean.OLS=apply(Coef.OLS,2, mean)
+bias2.OLS=(mean.OLS-betatrue)^2
+var.OLS = apply(Coef.OLS, 2, var)
+plot(bias2.OLS, xlab="index of beta",ylab="OLS Squared Bias" )
+plot(var.OLS, xlab ="index of beta", ylab="OLS Variance" )
 
-bias2.ridge=sum((colMeans(Coef.ridge)-betatrue)^2)
-var.ridge=sum((Coef.ridge-colMeans(Coef.ridge))^2)/nsim
+mean.lasso=apply(Coef.lasso,2, mean)
+bias2.lasso=(mean.lasso-betatrue[-1])^2
+var.lasso = apply(Coef.lasso, 2, var)
+plot(bias2.lasso, xlab="index of beta",ylab="LASSO Squared Bias" )
+plot(var.lasso, xlab ="index of beta", ylab="LASSO Variance" )
 
-bias2.bhs=sum((colMeans(Coef.bhs)-betatrue)^2)
-var.bhs=sum((Coef.bhs-colMeans(Coef.bhs))^2)/nsim
+mean.ridge=apply(Coef.ridge,2, mean)
+bias2.ridge=(mean.ridge-betatrue)^2
+var.ridge = apply(Coef.ridge, 2, var)
+plot(bias2.ridge, xlab="index of beta",ylab="Ridge Squared Bias" )
+plot(var.ridge, xlab ="index of beta", ylab="Ridge Variance" )
 
-bias2.OLS
-var.OLS
-
-bias2.lasso
-var.lasso
-
-bias2.ridge
-var.ridge
-
-bias2.bhs
-var.bhs
+mean.bhs=apply(Coef.bhs,2, mean)
+bias2.bhs=(mean.bhs-betatrue)^2
+var.bhs = apply(Coef.bhs, 2, var)
+plot(bias2.bhs, xlab="index of beta",ylab="Horseshoe Prior Squared Bias" )
+plot(var.bhs, xlab ="index of beta", ylab="Horseshoe Prior Variance" )
 ```
-For OLS: $\hat{bias^2}=0.06$, $\hat{var}=126.79$\newline
-For lasso: $\hat{bias^2}=1.45$, $\hat{var}=43.82$\newline
-For Ridge: $\hat{bias^2}=2.44$, $\hat{var}=67.97$\newline
-For horseshoe: $\hat{bias^2}=2.80$, $\hat{var}=62.15$\newline
+
+###(d)
+
+```{r}
+library(lars)
+library(MASS)
+library(matrixStats)
+library(monomvn)
+library(Rcpp)
+library(RcppArmadillo)
+sourceCpp("GDP.cpp")
+
+Coef.gdp = matrix(rep(0,2000),nrow=100) ## record GDP estimates of beta for each simulation 
+gdp.MSE = rep(0,100) ##MSE
+
+for( i in 1:100){
+  rm(df)
+  load(fname[i])
+  X = as.matrix(df[-1]); Y = df[,1]
+  X.scale = scale(X); n = length(Y); X.mean = colMeans(X); X.sd = colSds(X)
+  coeftrue = betatrue
+  coeftrue[1] = betatrue[1]+sum(betatrue[-1]*X.mean) 
+  coeftrue[-1] = betatrue[-1]*X.sd
+  #Run GDP
+  gdp=gdp_em(Y,X,1,1)
+  Coef.gdp[i,1:20]=t(gdp$B)
+  gdp.MSE[i] = sum((betatrue[-1] - t(gdp$B))^2)
+  }
+
+mean.gdp=apply(Coef.gdp,2, mean)
+bias2.gdp=(mean.gdp-betatrue[-1])^2
+var.gdp = apply(Coef.gdp, 2, var)
+
+plot(bias2.gdp, xlab="index of beta",ylab="GDP Squared Bias" )
+plot(var.gdp, xlab ="index of beta", ylab="GDP Variance" )
+
+## Observed MSE for each simulation
+boxplot(gdp.MSE, names=c("GDP"), main="Observed MSE")
+```
+
+###(e)
+
+```{r}
+boxplot(OLS.MSE, lasso.MSE, ridge.MSE, bhs.MSE, gdp.MSE, names=c("OLS", "lasso", "ridge", "horseshoe","GDP"), main="Observed MSE")
+```
+From the result, we can see that estimation from Horseshoe Prior enjoys the lowest MSE. Blasso appears to be the best method. In terms of bias and variability, OLS estimator has both the least squared bias and the highest variance, besides, the variance seems far higher than those of other methods. Therefore, the other methods all performs better than OLS estimator in overall sense. It means that for these datas sets, shrinkage methods works much better than the normal OLS, if we can sacrifies a little bit bias, we can obatin much lower variance. When the covariates X has large correlation structure between each other, it's better to apple shrinkage methods than the traditional OLS.\newline
 
 ## Problem 2
 
