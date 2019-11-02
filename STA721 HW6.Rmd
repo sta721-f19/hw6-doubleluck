@@ -175,8 +175,9 @@ var.bhs = apply(Coef.bhs, 2, var)
 plot(bias2.bhs, xlab="index of beta",ylab="Horseshoe Prior Squared Bias" )
 plot(var.bhs, xlab ="index of beta", ylab="Horseshoe Prior Variance" )
 ```
+\newline
 
-###(d)
+### (d)
 
 ```{r}
 library(lars)
@@ -215,11 +216,12 @@ plot(var.gdp, xlab ="index of beta", ylab="GDP Variance" )
 boxplot(gdp.MSE, names=c("GDP"), main="Observed MSE")
 ```
 
-###(e)
+### (e)
 
 ```{r}
 boxplot(OLS.MSE, lasso.MSE, ridge.MSE, bhs.MSE, gdp.MSE, names=c("OLS", "lasso", "ridge", "horseshoe","GDP"), main="Observed MSE")
 ```
+\newline
 From the result, we can see that estimation from Horseshoe Prior enjoys the lowest MSE. Blasso appears to be the best method. In terms of bias and variability, OLS estimator has both the least squared bias and the highest variance, besides, the variance seems far higher than those of other methods. Therefore, the other methods all performs better than OLS estimator in overall sense. It means that for these datas sets, shrinkage methods works much better than the normal OLS, if we can sacrifies a little bit bias, we can obatin much lower variance. When the covariates X has large correlation structure between each other, it's better to apple shrinkage methods than the traditional OLS.\newline
 
 ## Problem 2
