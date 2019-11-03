@@ -185,6 +185,47 @@ Returning to our original joint distribution and dividing by this normalizing co
 See
     Michael Lindon's implementation in R using Rcpp \url{https://michaellindon.github.io/lindonslog/mathematics/statistics/generalized-double-pareto-shrinkage-priors-sparse-estimation-regression/index.html}  or implement in JAGS.  Be careful about standardizing the predictors and change of variables for coefficients when computing the MSE!
 
+<<>>=
+library(R2jags)
+model.jags <- function() {
+  for (i in 1:n) {
+    Y[i] ~ dnorm(X[i,]%*%beta, phi)
+  }
+  
+  phi ~ dgamma(0.001, 0.001) # approximate independent Jeffrey Prior
+  # beta0 ~ dnorm(0, 0.000000001*phi) # y was centered prior to transformation - do we need to do this after as well? 
+  
+  
+  for (j in 1:p) {
+  lambda[j] ~ dgamma(alpha, eta)
+  tau[j] ~ dgamma(1, lambda[j]^2/2) # not sure if there is a special function for exponential
+  beta[j] ~ dnorm(0, phi/tau[j]) # dnorm uses precision
+  }
+  # beta ~ dmnorm(mu, inverse(tau)) # uses precision, so need inverse. check that this will diagonalize correctly? 
+  
+  # yhat <- beta0 + X%*%beta
+  beta_actual <- v%*%beta
+}
+
+xbar <- apply(X, MARGIN=2, mean)
+X.c <- X-xbar
+X.svd <- svd(X.c)
+Y.c <- Y - mean(Y)
+Y.star <- t(X.svd$u)%*%Y.c
+X.s <- diag(X.svd$d)
+
+data = list(alpha=1, eta=1, v=X.svd$v, Y=Y.star[,1], X=X.s, n=nrow(X.s), p=ncol(X.s))
+ZSout = jags(data, inits=NULL, parameters.to.save=c("beta0", "beta", "tau", "lambda", "phi", "beta_actual"), model=model.jags, n.iter=10000)
+
+yhats <- X.c%*%t(ZSout$BUGSoutput$sims.list$beta_actual) + mean(Y) # + ZSout$BUGSoutput$sims.list$beta0[,1]
+mse_predict <- apply( (yhats-Y[,1])^2, 2, mean)
+
+# TODO I think something is going wrong with the scaling
+
+@
+
+
+
 \item In terms of MSE, which method(s) appears to be best (look  at average MSE and side-by-side boxplots)?  Which method has the least bias?  Which method has the most variability?
 
 \item  (Optional)- repeat the above simulations, but now consider predictive MSE for  predicting new $\Y^*$'s at new $\X^*$ values with the same correlation  structure.  Are the methods that are best for estimating $\b$ also  best for estimating $\Y^*$?   Which seems to be harder?
