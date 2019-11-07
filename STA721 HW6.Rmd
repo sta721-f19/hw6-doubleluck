@@ -2,8 +2,20 @@
 title: "STA721 HW6"
 author: "Zheng Yuan        Evan Wyse"
 date: "2019/10/30"
-output: pdf_document
+output: 
+  pdf_document:
+    includes:
+      in_header: macros.tex
+header_includes:
+  macros.tex
 ---
+
+\def\xtx{\X^T\X}
+\def\bh{\hat{\b}}
+\def\bt{\tilde{\b}}
+\def\X{\mathbf{X}}
+\def\Y{\mathbf{Y}}
+
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -178,8 +190,45 @@ plot(var.bhs, xlab ="index of beta", ylab="Horseshoe Prior Variance" )
 \newline
 
 ### (d)
+We assume here a centered, rotated $\X$. Also, $\tau, \lambda$ represent diagonal matrices in our notation, with $\tau_{j}$ denoting a particular diagonal element. 
 
-```{r}
+We can write the joint distribution $p(\Y, \b, \tau, \lambda, \phi) \propto \phi^{n/2}exp(-\frac{\phi}{2}(\b-\bh)^T(\xtx)(\b-\bh))exp(-\frac{\phi}{2}SSE)exp(-\frac{\phi}{2}(\b_0-\bar{y})^2n)p(\b|\tau,\phi)p(\b_0, \phi)p(\tau|\lambda)p(\lambda)$
+
+So $$\begin{aligned} \b \propto exp(-\frac{\phi}{2}\b^T\tau^{-1}\b)exp(-frac{\phi}{2}(\b-\bh)^T(\xtx)(\b-\bh))\\
+\propto exp(-\frac{\phi}{2}(\b^T(\xtx+\tau^{-1})\b -2\b^T(\xtx+\tau^{-1})(\xtx+\tau^{-1})^{-1}\xtx\bh ))
+\end{aligned}$$
+
+We recognize a normal kernel, thus $\b \sim N((\xtx+\tau^{-1})^{-1}\xtx\bh, (\xtx+\tau^{-1})^{-1})$. We can simplify with the identity $\xtx\bh = \X^T\Y$ to obtain the formula in Armagan, Dunson and Lee of $\b \sim N((\xtx+\tau^{-1})^{-1}\X^T\Y, (\xtx+\tau^{-1})^{-1}/\phi)$
+
+It is simpler to find $\tau_{j}$ components individually 
+$$\begin{aligned} \tau_j \propto p(\b|\tau_j,\phi)p(\tau_j|\lambda_j) \propto  (\phi/\tau_j)^{1/2}exp(-\frac{\phi}{2}\b_j^T\b_j/\tau_j)exp(-\lambda^2\tau_j)\\
+\propto \tau_j^{-1/2}exp(-\frac{1}{2}(\phi\b_j^2/\tau_j+\lambda_j^2\tau_j))\\
+\end{aligned}$$
+We can recognize a Generalized Inverse Gaussian kernel, with parameters $\mu = 1/2, \nu=\lambda_j^2, \xi=\b_j^2/\tau$\\
+
+$$\begin{aligned} \phi \propto \phi^{n/2}exp(-\frac{\phi}{2}(\b-\bh)^T(\xtx)(\b-\bh))exp(-\frac{\phi}{2}SSE)exp(-\frac{\phi}{2}(\b_0-\bar{y})^2n)p(\b|\tau,\phi)p(\b_0, \phi)\\ 
+\propto \phi^{n/2}exp(-\frac{\phi}{2}((\b-\bh)^T(\xtx)(\b-\bh)+SSE + n(b_0-\bar{y})^2 + \b^T\tau^{-1}\b)) |\tau/\phi|^{-1/2} 1/\phi \\ 
+\propto \phi^{(n+p)/2-1}exp(-\frac{\phi}{2}((\b-\bh)^T(\xtx)(\b-\bh)+SSE + n(b_0-\bar{y})^2 + \b^T\tau^{-1}\b))
+\end{aligned}$$
+
+We can recognize a (rather ugly) Gamma kernel, with parameters $\alpha = (n+p)/2, \beta=((\b-\bh)^T(\xtx)(\b-\bh)+SSE + n(b_0-\bar{y})^2 + \b^T\tau^{-1}\b)/2$\\
+
+Since $\b_0 \propto exp(-\frac{\phi}{2}(n(b_0-\bar{y})^2))$, we can recognize a normal kernel, with $\mu=\bar{y}, \sigma^2 = 1/(n\phi)$\\
+
+
+Finally, $\lambda_j \propto p(\lambda_j|\tau_j)p(\lambda_j) \propto \lambda_j^2 exp(-\frac{1}{2}\lambda_j^2/2)\lambda_j^{\alpha-1}exp(-\lambda_j\eta) = \lambda^{(\alpha+2)-1}exp(-\frac{1}{2}(\lambda_j^2\tau_j+2\lambda_j\eta)) \propto \lambda^{(\alpha+2)-1}exp(-\frac{\tau_j}{2}(\lambda_j+\frac{\eta}{\tau_j})^2)$. We can recognize a Generalized gamma distribution \url{https://en.wikipedia.org/wiki/Generalized_gamma_distribution} with parameters $a=\sqrt{\frac{2}{\tau_j}}, p=2, d=\alpha+2$, so $\lambda_j+\frac{\eta}{\tau_j} \sim GenGamma(\frac{2}{\tau_j}, 2, \alpha+2)$\\
+
+Also note that if $\alpha+2 \in \mathbb{N}$, then we can utilize a scaled $\chi$ distribution with $\alpha+2$ degrees of freedom. 
+
+It is alternatively possible to return to our joint distribution, and marginalize $\tau$ from the distribution entirely.\\
+Since $\tau_j \sim GIG(\mu=1/2, \nu=\lambda_j^2, \xi=\phi\b_j^2)$, our integral will be proportional to the inverse of the normalizing constant $K_{\mu}(\sqrt{\nu\xi})(\nu/\xi)^{\mu/2}$, where $K_{1/2}$ is a modified Bessel function of the second kind. Resources online here \url{http://functions.wolfram.com/Bessel-TypeFunctions/BesselK/introductions/Bessels/05/} indicate that $K_{1/2}(z) = \frac{e^{-z}}{\sqrt{z}}$, so we obtain a normalizing constant overall of $e^{-\sqrt{\nu\xi}} (\nu\xi)^{1/4}(\nu)^{1/4}\xi^{-1/4} = e^{-\sqrt{\nu\xi}}(\nu)^{1/2} = e^{-\lambda_j|\b_j|\sqrt{\phi}}\lambda_j$
+
+Returning to our original joint distribution and dividing by this normalizing constant, we can obtain $\lambda_j \propto exp(-|\b_j|\lambda_j^{-1}\sqrt{\phi})\lambda_j^{-1}\lambda_j^2\lambda^{\alpha-1}exp(-\lambda_j\eta) = \lambda_j^{(\alpha+1)-1}exp(-\lambda(|\b_j|\sqrt{\phi}+\eta))$, and obtain a Gamma kernel with $\alpha=\alpha+1, \beta=|\b_j|\sqrt{\phi}+\eta$
+
+
+### (e)
+
+```{r, cache=T}
 library(lars)
 library(MASS)
 library(matrixStats)
@@ -216,7 +265,7 @@ plot(var.gdp, xlab ="index of beta", ylab="GDP Variance" )
 boxplot(gdp.MSE, names=c("GDP"), main="Observed MSE")
 ```
 
-### (e)
+### (f)
 
 ```{r}
 boxplot(OLS.MSE, lasso.MSE, ridge.MSE, bhs.MSE, gdp.MSE, names=c("OLS", "lasso", "ridge", "horseshoe","GDP"), main="Observed MSE")
